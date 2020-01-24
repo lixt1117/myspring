@@ -1,6 +1,5 @@
 package com.lxt.java.mini.v01;
 
-
 import com.lxt.java.mini.annotation.MyAutoWired;
 import com.lxt.java.mini.annotation.MyController;
 import com.lxt.java.mini.annotation.MyRequestMapping;
@@ -20,18 +19,21 @@ import java.net.URL;
 import java.util.*;
 
 /**
- * @Auther: lixiaotian
- * @Date: 2020/1/14 17:29
- * @Description:模仿spring编写的DispatcherServlet类 主要功能步骤：
- * 1.读取配置文件
- * 2.扫描路径下所有的类，进行实例化，并根据类所加的注解分别保存在不同的容器中（IOC）
- * 3.读取类的属性，对加了MyAutoWired注解的进行注入（DI）
- * 4.读取controller类下的方法，将MyRequestMapping中的路径和方法进行映射并保存在容器中
- * (以上为启动时容器所做工作，下面为容器运行时的大致流程)
- * 5.接到Http请求后，根据调用路径名，从容器中获取方法的调用和参数集合
- * 6.校验并组装参数，全部完成后进行方法调用
+ * @Description: 模仿spring编写的DispatcherServlet类
+ * 主要功能步骤：
+ *      1.读取配置文件
+ *      2.扫描路径下所有的类，进行实例化，并根据类所加的注解分别保存在不同的容器中（IOC）
+ *      3.读取类的属性，对加了MyAutoWired注解的进行注入（DI）
+ *      4.读取controller类下的方法，将MyRequestMapping中的路径和方法进行映射并保存在容器中
+ *      (以上为启动时容器所做工作，下面为容器运行时的大致流程)
+ *      5.接到Http请求后，根据调用路径名，从容器中获取方法的调用和参数集合 6.校验并组装参数，全部完成后进行方法调用
+ * @Param:
+ * @Return:
+ * @auther: lixiaotian
+ * @date: 2020/1/19 19:01
  */
 public class MyDispatcherServlet extends HttpServlet {
+
     private Map<String, Object> mapping = new HashMap<String, Object>();
 
     @Override
@@ -59,27 +61,21 @@ public class MyDispatcherServlet extends HttpServlet {
         }
         Method method = (Method) this.mapping.get(url);
         Map<String, String[]> params = req.getParameterMap();
-        //这个版本的尴尬之处在接受请求时把方法参数写死了。。。也就是说只能相应一个方法
-        Object result =
-                method.invoke(this.mapping.get(method.getDeclaringClass().getName()),
-                        new Integer(params.get("a")[0]),
-                        new Integer(params.get("b")[0]));
+        // 这个版本的尴尬之处在接受请求时把方法参数写死了。。。也就是说只能响应一个方法
+        Object result = method.invoke(this.mapping.get(method.getDeclaringClass().getName()),
+                new Integer(params.get("a")[0]), new Integer(params.get("b")[0]));
         resp.getWriter().println(result);
     }
-
 
     @Override
     public void init(ServletConfig config) throws ServletException {
         InputStream inputStream = null;
         try {
-            //读取spring配置文件的路径
-            String contextConfigLocation = config.getInitParameter(
-                    "contextConfigLocation");
-            //读取配置文件
+            // 读取spring配置文件的路径
+            String contextConfigLocation = config.getInitParameter("contextConfigLocation");
+            // 读取配置文件
             Properties properties = new Properties();
-            inputStream =
-                    this.getClass().getClassLoader().getResourceAsStream(contextConfigLocation
-                    );
+            inputStream = this.getClass().getClassLoader().getResourceAsStream(contextConfigLocation);
             try {
                 properties.load(inputStream);
             } catch (IOException e) {
@@ -87,11 +83,11 @@ public class MyDispatcherServlet extends HttpServlet {
                 e.printStackTrace();
             }
             String scanPackage = properties.getProperty("scanPackage");
-            //扫描路径下的class文件并将class路径名保存
+            // 扫描路径下的class文件并将class路径名保存
             doScanner(scanPackage);
-            //1.遍历扫描到的class名字，实例化class，并保存类的实例
-            //2.读取controller层的方法，并将URL和method实例的映射进行保存
-            //这里原本是直接遍历mapping.keySet()的，结果运行出现了ConcurrentModificationException
+            // 1.遍历扫描到的class名字，实例化class，并保存类的实例
+            // 2.读取controller层的方法，并将URL和method实例的映射进行保存
+            // 这里原本是直接遍历mapping.keySet()的，结果运行出现了ConcurrentModificationException
             for (String clazzName : new ArrayList<String>(mapping.keySet())) {
                 Class myClass = null;
                 try {
@@ -101,19 +97,18 @@ public class MyDispatcherServlet extends HttpServlet {
                     e.printStackTrace();
                 }
                 try {
-                    //如果class是controller，则实例化并保存method映射,如果是service则进行实例化
+                    // 如果class是controller，则实例化并保存method映射,如果是service则进行实例化
                     if (myClass.isAnnotationPresent(MyController.class)) {
-                        MyController myController =
-                                (MyController) myClass.getAnnotation(MyController.class);
-                        //获取类的public方法
+                        MyController myController = (MyController) myClass.getAnnotation(MyController.class);
+                        // 获取类的public方法
                         Method[] methods = myClass.getMethods();
                         for (int i = 0; i < methods.length; i++) {
                             if (methods[i].isAnnotationPresent(MyRequestMapping.class)) {
-                                //方法的路径
-                                String methodPath = myController.value() +
-                                        methods[i].getAnnotation(MyRequestMapping.class).value();
+                                // 方法的路径
+                                String methodPath = myController.value()
+                                        + methods[i].getAnnotation(MyRequestMapping.class).value();
                                 methods[i].setAccessible(true);
-                                //保存url和method的映射
+                                // 保存url和method的映射
                                 this.mapping.put(methodPath, methods[i]);
                             }
                         }
@@ -129,28 +124,26 @@ public class MyDispatcherServlet extends HttpServlet {
                     e.printStackTrace();
                 }
             }
-            //类实例化完成后，开始DI（自动注入）
+            // 类实例化完成后，开始DI（自动注入）
             for (Object object : mapping.values()) {
                 if (object == null || object instanceof Method) {
                     continue;
                 }
                 Class clazz = object.getClass();
-                //获取对象的所有属性
+                // 获取对象的所有属性
                 Field[] fields = clazz.getDeclaredFields();
                 for (Field field : fields) {
                     if (!field.isAnnotationPresent(MyAutoWired.class)) {
                         continue;
                     }
-                    MyAutoWired autowired =
-                            field.getAnnotation(MyAutoWired.class);
+                    MyAutoWired autowired = field.getAnnotation(MyAutoWired.class);
                     String beanName = autowired.value();
                     if ("".equals(beanName)) {
                         beanName = field.getType().getName();
                     }
                     field.setAccessible(true);
                     try {
-                        field.set(mapping.get(clazz.getName()),
-                                mapping.get(beanName));
+                        field.set(mapping.get(clazz.getName()), mapping.get(beanName));
                     } catch (IllegalAccessException e) {
                         e.printStackTrace();
                     }
@@ -171,9 +164,7 @@ public class MyDispatcherServlet extends HttpServlet {
     }
 
     private void doScanner(String scanPackage) {
-        URL url =
-                this.getClass().getClassLoader().getResource(
-                        "/" + scanPackage.replaceAll("\\.", "/"));
+        URL url = this.getClass().getClassLoader().getResource("/" + scanPackage.replaceAll("\\.", "/"));
         File classDir = new File(url.getFile());
         for (File file : classDir.listFiles()) {
             if (file.isDirectory()) {
@@ -182,10 +173,7 @@ public class MyDispatcherServlet extends HttpServlet {
                 if (!file.getName().endsWith(".class")) {
                     continue;
                 }
-                String clazzName =
-                        (scanPackage + "." + file.getName().replace(
-                                ".class",
-                                ""));
+                String clazzName = (scanPackage + "." + file.getName().replace(".class", ""));
                 mapping.put(clazzName, null);
             }
         }

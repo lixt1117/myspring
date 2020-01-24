@@ -7,7 +7,7 @@
     <servlet>
         <servlet-name>mySpringmvc</servlet-name>
         <servlet-class>
-            com.lxt.java.mini.v01.MyDispatcherServlet
+            com.lxt.java.mini.v02.MyDispatcherServlet
         </servlet-class>
         <init-param>
             <param-name>contextConfigLocation</param-name>
