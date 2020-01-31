@@ -1,16 +1,5 @@
-package com.lxt.java.mini.v02;
+package com.lxt.java.mini.v03;
 
-import com.lxt.java.mini.annotation.*;
-import com.lxt.java.mini.constants.HttpResponseEnum;
-import com.lxt.java.mini.exception.HttpException;
-import com.lxt.java.mini.util.StringUtils;
-import sun.jvm.hotspot.oops.ObjectHeap;
-
-import javax.servlet.ServletConfig;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,38 +8,51 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.*;
+import java.util.regex.Pattern;
+
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import com.lxt.java.mini.annotation.*;
+import com.lxt.java.mini.constants.HttpResponseEnum;
+import com.lxt.java.mini.exception.HttpException;
+import com.lxt.java.mini.util.StringUtils;
+import com.lxt.java.mini.v02.MyMethod;
+import com.lxt.java.mini.v03.convert.MyConvertEnum;
 
 /**
  * @Auther: lixiaotian
- * @Date: 2020/1/16 10:30
- * @Description:模仿spring编写的DispatcherServlet类 相较于第一版，主要做了以下改进：
- * 1.将IOC容器进行分类,controller和service等不再保存在一个容器里
- * 2.使用工厂模式创建bean——这里选择工厂方法？(后面写完了发现是简单工厂)
- * 3.在获取bean的时候使用单例模式（这个第一版也是）
- * 4.在解析请求，选择调用的方法和组装参数时，使用策略模式？
- * 5.老师的代码里还用了模版方法，我这里暂时想不起来？
- * 6.看老师的代码里，IOC保存的key使用了默认类名首字母小写，而不用V1版的className
- * ，暂时不知道为啥-后来我猜测是一种约定，毕竟大多数人命名的bean的名字都是类名的首字母小写
+ * @Date: 2020/1/24 22:10
+ * @Description:模仿spring编写的DispatcherServlet类
+ * 相较于v2版本，做了以下改进：
+ *      1.解决请求参数动态类型强转问题
+ *      2.像SpringMVC 一样支持正则
+ *      3.hadnlerMapping改用list结构，原因是既然像spring的url支持正则，而map里的key（url
+ *      ）不能重复，既然怎么都要遍历，还不如直接上list
  */
 public class MyDispatcherServlet extends HttpServlet {
 
     // spring配置文件
-    Properties properties = new Properties();
+    private Properties properties = new Properties();
 
     // 扫描的包路径
-    String scannerpath = "";
+    private String scannerPath = "";
 
     // 保存class名字的容器
-    List<String> classList = new ArrayList<>();
+    private List<String> classList = new ArrayList<>();
 
     // 保存Controller的容器
-    Map<String, Object> controllerMapping = new HashMap<>();
+    private Map<String, Object> controllerMapping = new HashMap<>();
 
     // 保存service的容器
-    Map<String, Object> serviceMapping = new HashMap<>();
+    private Map<String, Object> serviceMapping = new HashMap<>();
 
     // 保存方法路径和method实例的容器
-    Map<String, Object> handlerMapping = new HashMap<>();
+    // private Map<String, Object> handlerMapping = new HashMap<>();
+    private List<MyHandler> handlerMapping = new ArrayList<>();
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -74,23 +76,18 @@ public class MyDispatcherServlet extends HttpServlet {
 
     private void doDispatch(HttpServletRequest req, HttpServletResponse resp) throws HttpException {
         try {
-            // 请求路径，如：/myspring_war/member/getMemberInfoByName?name=lixiaotian
-            String requestURI = req.getRequestURI();
-            // 上下文路径，debug看好像是项目根路径，如：/myspring_war
-            String contextPath = req.getContextPath();
-            // 获取参数
-            Map<String, String[]> paramMap = req.getParameterMap();
-            // 获取方法url
-            requestURI = requestURI.replace(contextPath, "").replaceAll("/+", "/");
-            if (handlerMapping.containsKey(requestURI)) {
-                MyMethod myMethod = (MyMethod) handlerMapping.get(requestURI);
+            // 获取handler
+            MyHandler myHandler = getHandler(req);
+            if (null != myHandler) {
+                // 获取参数
+                Map<String, String[]> paramMap = req.getParameterMap();
                 // Method实例
-                Method method = myMethod.getMethod();
-                // 参数名称
-                String[] paramNames = myMethod.getParamNames();
-                // 方法所在的类的名字
-                String simpleClazzName = myMethod.getSimpleClazzName();
-                // 参数类型
+                Method method = myHandler.getMethod();
+                // 参数名称数组
+                String[] paramNames = myHandler.getParamNames();
+                // 方法所在的controller实例
+                Object controller = myHandler.getController();
+                // 参数类型数组
                 Class[] paramTypes = method.getParameterTypes();
                 // 反射调用方法传入的参数数组
                 Object[] params = new Object[paramTypes.length];
@@ -109,16 +106,18 @@ public class MyDispatcherServlet extends HttpServlet {
                         // 参数值数组
                         String[] paramvalues = paramMap.get(paramNames[i]);
                         for (String paramvalue : paramvalues) {
-                            // 这里我无法解决参数类型动态转换，网上也没搜到什么办法，看了下老师的v2代码这个问题留在了v3
-                            // 解决，那我也下个版本解决
-                            params[i] = paramvalue;
+                            // 调用枚举里定义的方法，实现参数类型动态转换
+                            MyConvertEnum myConvertEnum = MyConvertEnum
+                                    .valueOf(paramTypes[i].getSimpleName().toUpperCase());
+                            params[i] = myConvertEnum.convert(paramvalue);
+                            // params[i] = paramvalue;
                         }
                     } else {
                         // 请求参数不全，返回400
                         throw new HttpException(HttpResponseEnum.CODE_400);
                     }
                 }
-                Object result = method.invoke(controllerMapping.get(simpleClazzName), params);
+                Object result = method.invoke(controller, params);
                 if (null == result) {
                     return;
                 } else {
@@ -141,13 +140,30 @@ public class MyDispatcherServlet extends HttpServlet {
         }
     }
 
+    // 根据url遍历获取handler
+    private MyHandler getHandler(HttpServletRequest req) throws Exception {
+        // 请求路径，如：/myspring_war/member/getMemberInfoByName?name=lixiaotian
+        String requestURI = req.getRequestURI();
+        // 上下文路径，debug看好像是项目根路径，如：/myspring_war
+        String contextPath = req.getContextPath();
+        // 获取方法url
+        requestURI = requestURI.replace(contextPath, "").replaceAll("/+", "/");
+        for (MyHandler myHandler : handlerMapping) {
+            if (!myHandler.getUrlPattern().matcher(requestURI).matches()) {
+                continue;
+            }
+            return myHandler;
+        }
+        return null;
+    }
+
     @Override
     public void init(ServletConfig config) throws ServletException {
         try {
             // 1.读取配置文件
             readApplicationContext(config);
             // 2.扫描路径下所有的类
-            doscanner(scannerpath);
+            doscanner(scannerPath);
             // 3.根据类的功能（注解）分别保存在不同的IOC容器中
             initClasses();
             // 4.读取类的属性，对加了MyAutoWired注解的进行注入（DI）
@@ -168,7 +184,7 @@ public class MyDispatcherServlet extends HttpServlet {
             String contextConfigLocation = config.getInitParameter("contextConfigLocation");
             inputStream = this.getClass().getClassLoader().getResourceAsStream(contextConfigLocation);
             properties.load(inputStream);
-            scannerpath = properties.getProperty("scanPackage");
+            scannerPath = properties.getProperty("scanPackage");
         } catch (Exception e) {
             e.printStackTrace();
             throw e;
@@ -272,9 +288,12 @@ public class MyDispatcherServlet extends HttpServlet {
                         }
                         paramNames[i] = paramName;
                     }
-                    MyMethod myMethod = new MyMethod(method, paramNames,
-                            StringUtils.toLowercaseFirstLetter(clazz.getSimpleName()));
-                    handlerMapping.put(newMethodUrl.toString(), myMethod);
+                    // url转正则
+                    Pattern pattern = Pattern.compile(newMethodUrl.toString());
+                    MyHandler myHandler = new MyHandler(pattern, method, paramNames, object);
+                    // MyMethod myMethod = new MyMethod(method, paramNames,
+                    // StringUtils.toLowercaseFirstLetter(clazz.getSimpleName()));
+                    handlerMapping.add(myHandler);
                 }
             }
         }

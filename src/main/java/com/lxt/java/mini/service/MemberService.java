@@ -10,7 +10,7 @@ import com.lxt.java.mini.annotation.MyService;
 @MyService
 public class MemberService {
 
-    public String getMemberByName(String name) throws Exception {
-        return "name:" + name + "\n" + "age:" + "25";
+    public String getMemberByName(String name, Integer age) throws Exception {
+        return "name:" + name + "\n" + "age:" + age;
     }
 }

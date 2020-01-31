@@ -20,9 +20,9 @@ public class MemberController {
 
     @MyRequestMapping("/getMemberInfoByName")
     public void getMemberInfoByName(HttpServletRequest request, HttpServletResponse response,
-            @MyRequestParam("name") String name) throws IOException {
+            @MyRequestParam("name") String name, @MyRequestParam("age") Integer age) throws IOException {
         try {
-            String result = memberService.getMemberByName(name);
+            String result = memberService.getMemberByName(name, age);
             response.getWriter().print(result);
         } catch (Exception e) {
             e.printStackTrace();
@@ -42,7 +42,7 @@ public class MemberController {
     public void testMethodGetParameterAnnotations(HttpServletRequest request, HttpServletResponse response,
             @MyRequestParam2("name2") @MyRequestParam("name") String name, @MyRequestParam("age") String age) {
         try {
-            String result = memberService.getMemberByName(name);
+            String result = memberService.getMemberByName(name, 17);
             response.getWriter().print(result);
         } catch (Exception e) {
             e.printStackTrace();
@@ -52,5 +52,17 @@ public class MemberController {
     @MyRequestMapping("/addTwoNum")
     public String addTwoNum(@MyRequestParam("a") Integer a, @MyRequestParam("b") Integer b) {
         return a + b + "";
+    }
+
+    @MyRequestMapping("/goBackAtAge/\\d+")
+    public void goBackAtAge(HttpServletRequest request, HttpServletResponse response,
+            @MyRequestParam("name") String name, @MyRequestParam("age") Integer age) throws IOException {
+        try {
+            String result = memberService.getMemberByName(name, age);
+            response.getWriter().print(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.getWriter().print("system error!");
+        }
     }
 }
